@@ -107,6 +107,16 @@ _REGEX_RULES: list[tuple[str, str, str, str, re.Pattern[str], str]] = [
         "Leaving TLS verification off in production exposes traffic to MITM attacks.",
     ),
     (
+        "SEC-007",
+        "security",
+        "error",
+        "Deserialising untrusted data with pickle/yaml.load",
+        re.compile(r"""(?ix)
+            (pickle\.loads?|cPickle\.loads?|yaml\.load\s*\((?!.*Loader\s*=\s*(?:Safe|safe_)))
+        """),
+        "Use safe loaders (yaml.safe_load, json.loads) or signed payloads.",
+    ),
+    (
         "BUG-001",
         "bug",
         "warning",

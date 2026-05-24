@@ -51,6 +51,17 @@ Each submitted snippet is scored along three tracks:
 Identical snippets hit Redis and skip the model. Results are persisted to
 Postgres for history and aggregate metrics.
 
+> **A note on the ML signal.** Base `microsoft/codebert-base` (no
+> fine-tuning) produces embeddings that cluster tightly for any Python
+> source — raw cosine similarities of 0.9+ are normal even between
+> unrelated snippets. To extract useful signal anyway, the analyzer uses
+> **rank-aware top-1 matching with a margin gate**: it only fires when one
+> exemplar is meaningfully closer than all others, and only on inputs
+> long enough for the embedding to be stable. The rule engine remains the
+> authoritative signal; the ML layer is best thought of as an
+> experimental second opinion. Fine-tuning a classifier on labeled data
+> would dramatically improve precision and recall here.
+
 ## Stack
 
 - **Backend:** FastAPI · SQLAlchemy 2 · Pydantic v2 · transformers · torch

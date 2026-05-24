@@ -114,9 +114,26 @@ def _cosine(a: np.ndarray, b: np.ndarray) -> float:
 
 
 class Analyzer:
-    """Composite analyzer (rules + CodeBERT embeddings)."""
+    """Composite analyzer (rules + CodeBERT embeddings).
 
-    SIMILARITY_THRESHOLD = 0.78
+    A note on the ML signal: base ``microsoft/codebert-base`` (no fine-tuning)
+    produces embeddings that cluster very tightly for any Python source — raw
+    cosine similarities of 0.9+ across unrelated snippets are normal. To extract
+    a useful signal anyway, the analyzer uses *rank-aware top-1* matching:
+    return the single most-similar exemplar, but only when its similarity
+    exceeds a high absolute floor **and** beats the runner-up by a clear
+    margin. The result: high-precision ML hits at the cost of recall, and the
+    rule engine remains the authoritative signal source.
+    """
+
+    # Absolute cosine floor — base CodeBERT lives in a tight band, so the
+    # threshold has to be high.
+    SIMILARITY_FLOOR = 0.97
+    # Required gap between the top match and the runner-up. Without this,
+    # everything fires because everything is "0.95-ish similar" to everything.
+    MARGIN = 0.025
+    # Below this many non-whitespace chars the embedding is too noisy to use.
+    MIN_INPUT_CHARS = 80
 
     def __init__(self, encoder: CodeBertEncoder) -> None:
         self.encoder = encoder
@@ -159,26 +176,40 @@ class Analyzer:
     def _ml_findings(self, code: str) -> list[Finding]:
         if not self.encoder.available:
             return []
+        # Skip ML on very short inputs — embedding noise dominates and
+        # produces meaningless cosine similarities.
+        if len("".join(code.split())) < self.MIN_INPUT_CHARS:
+            return []
         self._ensure_exemplars()
         vec = self.encoder.encode(code)
-        if vec is None:
+        if vec is None or not self._exemplar_vecs:
             return []
-        findings: list[Finding] = []
-        for exemplar, ev in self._exemplar_vecs:
-            sim = _cosine(vec, ev)
-            if sim >= self.SIMILARITY_THRESHOLD:
-                findings.append(
-                    Finding(
-                        category=exemplar.category,
-                        severity=exemplar.severity,
-                        rule_id=exemplar.rule_id,
-                        line=None,
-                        message=f"{exemplar.message} (similarity {sim:.2f})",
-                        suggestion=exemplar.suggestion,
-                        confidence=round(sim, 3),
-                    )
-                )
-        return findings
+
+        scored = sorted(
+            ((exemplar, _cosine(vec, ev)) for exemplar, ev in self._exemplar_vecs),
+            key=lambda x: x[1],
+            reverse=True,
+        )
+        top, top_sim = scored[0]
+        runner_up_sim = scored[1][1] if len(scored) > 1 else 0.0
+
+        # Two-gate filter: absolute floor + meaningful margin over runner-up.
+        if top_sim < self.SIMILARITY_FLOOR:
+            return []
+        if (top_sim - runner_up_sim) < self.MARGIN:
+            return []
+
+        return [
+            Finding(
+                category=top.category,
+                severity=top.severity,
+                rule_id=top.rule_id,
+                line=None,
+                message=f"{top.message} (similarity {top_sim:.2f})",
+                suggestion=top.suggestion,
+                confidence=round(top_sim, 3),
+            )
+        ]
 
 
 def _merge_findings(findings: list[Finding]) -> list[Finding]:
