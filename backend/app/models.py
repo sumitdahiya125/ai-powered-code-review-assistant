@@ -3,8 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
@@ -17,7 +16,7 @@ def _uuid() -> uuid.UUID:
 class Review(Base):
     __tablename__ = "reviews"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=_uuid)
     language: Mapped[str] = mapped_column(String(32), index=True)
     code_hash: Mapped[str] = mapped_column(String(64), index=True)
     code: Mapped[str] = mapped_column(Text)
@@ -38,9 +37,9 @@ class Review(Base):
 class Finding(Base):
     __tablename__ = "findings"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=_uuid)
     review_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("reviews.id", ondelete="CASCADE"), index=True
+        Uuid(as_uuid=True), ForeignKey("reviews.id", ondelete="CASCADE"), index=True
     )
     category: Mapped[str] = mapped_column(String(32), index=True)
     severity: Mapped[str] = mapped_column(String(16), index=True)
